@@ -16,7 +16,7 @@ const (
 	//LESSGREATER // > or <
 	//SUM         // +
 	//PRODUCT     // *
-	//PREFIX      // -X or !X
+	PREFIX // -X or !X
 	//CALL        // myFunction(X)
 )
 
@@ -46,6 +46,8 @@ func New(l *lexer.Lexer) *Parser {
 	p.prefixParseFns = make(map[token.Type]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.BANG, p.parsePrefixExpression)
+	p.registerPrefix(token.MINUS, p.parsePrefixExpression)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -126,15 +128,35 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
+func (p *Parser) noPrefixParseFnError(t token.Type) {
+	// TODO: better message?
+	msg := fmt.Sprintf("no prefix parse function for %s found", t)
+	p.errors = append(p.errors, msg)
+}
+
 func (p *Parser) parseExpression(precedence int) ast.Expression {
 	prefix, ok := p.prefixParseFns[p.curToken.Type]
 	if !ok {
+		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
 
 	leftExp := prefix()
 
 	return leftExp
+}
+
+func (p *Parser) parsePrefixExpression() ast.Expression {
+	expression := &ast.PrefixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+	}
+
+	p.nextToken()
+
+	expression.Right = p.parseExpression(PREFIX)
+
+	return expression
 }
 
 func (p *Parser) curTokenIs(t token.Type) bool {
